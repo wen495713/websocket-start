@@ -78,7 +78,7 @@ export class WsAdapter implements WebSocketAdapter {
     ): Observable<any> {
         console.log(buffer);
         
-        // todo 此处可以直接使用tsbuffer解码
+        // tsbuffer解码
         let opServerInputData = TransportDataUtil.tsbuffer.decode(buffer.data, 'ServerInputData'); // 外层协议解码
         if (!opServerInputData.isSucc) {
             console.error('解析TSPRC数据包外层失败');
@@ -86,7 +86,7 @@ export class WsAdapter implements WebSocketAdapter {
         }
         let serverInput = opServerInputData.value as ServerInputData;
         let service = this.serviceMap.id2Service[serverInput.serviceId];
-        console.log(service.name);
+        console.log(service.name);  // 方法名
         let onReq;
         if (service.type === 'api') {
             onReq = this.tsbuffer.decode(serverInput.buffer, service.reqSchemaId);
@@ -95,16 +95,16 @@ export class WsAdapter implements WebSocketAdapter {
         }
         console.log(onReq.value);
         console.log({servicename: service.name});
-        const messageHandler = handlers.find(handler => {
-            // handler 就是我们@SubscribeMessage装饰过的方法
-                console.error(handler.message);
-                return handler.message === service.name;
+        const messageHandler = handlers.find(handler => {   // handler 就是我们@SubscribeMessage装饰过的方法
+            console.error(handler.message);
+            return handler.message === service.name;
         });
         if (!messageHandler) {
             return EMPTY;
         }
-        console.log(messageHandler);
-        // todo tsbuffer 解码
+        // todo tsbuffer 编码
+        let ret = messageHandler.callback(onReq.value);
+        console.log(ret);
         
         return process(messageHandler.callback(onReq.value));
     }
