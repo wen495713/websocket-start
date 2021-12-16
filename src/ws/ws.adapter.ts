@@ -4,8 +4,8 @@ import { MessageMappingProperties } from '@nestjs/websockets';
 import { Observable, fromEvent, EMPTY } from 'rxjs';
 import { mergeMap, filter } from 'rxjs/operators';
 import { TSBuffer, DecodeOutput} from 'tsbuffer';
-import { TransportDataUtil, ServiceMap, ServiceMapUtil } from 'tsrpc-base-client'
-import {ServerInputData } from 'tsrpc-proto';
+import { TransportDataUtil, ServiceMap, ServiceMapUtil, ApiService, } from 'tsrpc-base-client'
+import { ServerInputData, ServerOutputData } from 'tsrpc-proto';
 import { serviceProto } from '../shared/protocols/serviceProto';
 // import {WsServer as TsrpcWsServer} from 'tsrpc';
 
@@ -56,57 +56,64 @@ export class WsAdapter implements WebSocketAdapter {
         fromEvent(client, 'message')
             .pipe(
                 mergeMap(data => {
-                    return this.bindMessageHandler(client, data, handlers, process)
+                    return this._bindTsbufferMessageHandler(client, data, handlers, process)
                 }),
                 filter(result => {
-                    console.log({r: result});
+                    console.log({r: result});   // 上一步处理好的数据(完整编码的tsbuffer)
                     return result;
                 }),
             )
             .subscribe(response => {
-                console.log(response);
-                
-                client.send(JSON.stringify(response));
+                // console.log(response);
+                client.send(response);  // 发送二进制内容
+                // client.send(JSON.stringify(response));
             });
     }
 
-    bindMessageHandler(
+    _bindTsbufferMessageHandler(    // 解码,执行对应方法,编码
         client: WebSocket,
         buffer,
         handlers: MessageMappingProperties[],
         process: (data: any) => Observable<any>,
     ): Observable<any> {
-        console.log(buffer);
-        
         // tsbuffer解码
         let opServerInputData = TransportDataUtil.tsbuffer.decode(buffer.data, 'ServerInputData'); // 外层协议解码
         if (!opServerInputData.isSucc) {
             console.error('解析TSPRC数据包外层失败');
             return EMPTY;
         }
-        let serverInput = opServerInputData.value as ServerInputData;
-        let service = this.serviceMap.id2Service[serverInput.serviceId];
-        console.log(service.name);  // 方法名
+        let serverInput = opServerInputData.value as ServerInputData;   // 内层二进制内容
+        let service = this.serviceMap.id2Service[serverInput.serviceId] as ApiService;
         let onReq;
         if (service.type === 'api') {
-            onReq = this.tsbuffer.decode(serverInput.buffer, service.reqSchemaId);
+            onReq = this.tsbuffer.decode(serverInput.buffer, service.reqSchemaId);  // 根据请求结构ID解码明文内容
         }else {
-            onReq = this.tsbuffer.decode(serverInput.buffer, service.msgSchemaId);
+            // onReq = this.tsbuffer.decode(serverInput.buffer, service.msgSchemaId);   // 消息请求
         }
-        console.log(onReq.value);
-        console.log({servicename: service.name});
+        console.log(onReq.value);   // 解码后的请求内容
+        console.log({servicename: service.name});   // 请求方法名
         const messageHandler = handlers.find(handler => {   // handler 就是我们@SubscribeMessage装饰过的方法
-            console.error(handler.message);
+            console.error(handler.message); // 处理方法名
             return handler.message === service.name;
         });
         if (!messageHandler) {
             return EMPTY;
         }
-        // todo tsbuffer 编码
-        let ret = messageHandler.callback(onReq.value);
-        console.log(ret);
-        
-        return process(messageHandler.callback(onReq.value));
+        // 构造Promise
+        let next = Promise.resolve(messageHandler.callback(onReq.value)).then(ret => {
+            console.log({sn: serverInput.sn});
+            console.log({ret});
+            let op = this.tsbuffer.encode(ret, service.resSchemaId);    // 根据返回结构ID编码二进制内容
+            let serverOutputData: ServerOutputData = {
+                sn: serverInput.sn,
+                serviceId: serverInput.serviceId,
+                buffer: op.buf,
+            };
+            op = TransportDataUtil.tsbuffer.encode(serverOutputData, 'ServerOutputData');   // 外层协议编码
+            return op.buf;
+        })
+        // 返回异步处理
+        return process(next);
     }
 
     close(server) {

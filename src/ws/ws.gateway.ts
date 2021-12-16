@@ -22,9 +22,9 @@ export class WsStartGateway {
   }
 
   @SubscribeMessage('Send')
-  async len(@MessageBody() send: ReqSend): Promise<ResSend> {
+  async sendmsg(@MessageBody() send: ReqSend): Promise<ResSend> {
     console.log('invoke len');
-    // if (person.age === 33) await this._sleep(5000);
+    await this._sleep(1000);
     return {
       time: new Date()
     };
