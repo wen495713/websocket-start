@@ -1,4 +1,7 @@
 # 给NestJS增加Tsbuffer编码解码
+使用tsrpc/examples/chatroom/frontend调试
+
+[trspc-examples](https://github.com/k8w/tsrpc-examples.git)
 # WebSocket演示例子
 给NestJS添加WebSocket功能。
 
