@@ -44,7 +44,6 @@ export class WsAdapter implements WebSocketAdapter {
     create(port: number, options: any = {}): any {
         // 注册tsrpc servicemap,方便获取名字
         this.serviceMap = ServiceMapUtil.getServiceMap(serviceProto);  // 映射服务方法
-        console.log(this.serviceMap);
         this.tsbuffer = new TSBuffer({
             ...serviceProto.types,
             // 其他类型
